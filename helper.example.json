@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "_comment": "Scripts and Compose files are root-trusted; script_binaries opt in, and flash SMB must be read-only.",
+  "socket_uid": 0,
+  "socket_gid": 10001,
+  "peer_uids": [10001],
+  "enabled": [],
+  "script_binaries": [],
+  "scripts": {},
+  "userscript_allow": [],
+  "read_timeout": 5,
+  "action_timeout": 300,
+  "output_bytes": 65536,
+  "flush_minutes": 60,
+  "log_bytes": 1048576,
+  "release_url": "https://api.github.com/repos/mrchrisneal/shazzzbot/releases/latest",
+  "update_url": "https://example.invalid/shazzzbot-helper/helper.pyz",
+  "update_sha256": "",
+  "update_version": ""
+}

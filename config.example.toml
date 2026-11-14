@@ -1,0 +1,313 @@
+# python -m tools.schema_export creates this file from shazzzbot/schema.py.
+# Replace the required Discord ids before startup. Secrets belong in .env.
+
+# Configuration format.
+config_format = 1
+
+# Discord server id.
+guild_id = 0
+
+# Audit channel id. Zero disables the channel.
+audit_channel_id = 0
+
+# Extra slash-command channel id. Zero disables it.
+commands_channel_id = 0
+
+# User to ping with /blowup. Zero disables it.
+blowup_user_id = 0
+
+# Seconds between host samples.
+interval = 10
+
+# Default time between edits of a message without images.
+edit_every = 60
+
+# Default time between image uploads. A message with images changes only when they upload. The learned budget can delay uploads.
+image_every = 60
+
+# State file in the bot data volume.
+state_file = "/data/state.json"
+
+# Log level. Changes need a restart.
+log_level = "info"
+
+# Hours that debug logging stays on after a start, then info. Zero keeps it on.
+debug_hours = 24
+
+# IANA time zone for displayed times.
+timezone = "UTC"
+
+# Use a green dot for healthy rows.
+green_ok = false
+
+# Section order. Unlisted sections follow.
+order = ["system", "history", "disks", "services", "docker", "apps", "tasks", "forges"]
+
+# Chart history.
+[history]
+# History retained in the data volume.
+days = 7
+
+# System card text.
+[system]
+# System card title.
+title = "Unraid System Info"
+# System card subtitle.
+subtitle = ""
+
+# Read-only host access.
+[host]
+# Read-only host mount.
+root = "/host"
+# Read-only emhttp data directory.
+emhttp = "/host/emhttp"
+# Docker socket proxy URL. Omit it to disable Docker checks.
+docker_proxy = "http://docker-proxy:2375"
+
+# Jellyfin now-playing. Requires JELLYFIN_KEY.
+[jellyfin]
+# Jellyfin base URL. Requires JELLYFIN_KEY.
+url = ""
+
+# Read-only NUT UPS.
+# [ups]
+# Read-only NUT target as name@host[:port]. The default port is 3493.
+# target = "ups@nut:3493"
+
+# Netdata alarms.
+[netdata]
+# Netdata base URL. Empty disables Netdata.
+url = ""
+# Netdata chart and alarm globs to hide.
+ignore = []
+
+# Scheduled and running tasks. Running-task colors do not add alerts.
+[tasks]
+# Number of upcoming tasks to show.
+shown = 20
+# Task names or globs to hide.
+ignore = []
+# Emphasize long tasks. Zero or false disables the time trigger.
+long_running_minutes = 60
+# Task kinds to emphasize. An empty list disables this trigger.
+heavy_kinds = ["parity", "file_integrity", "appdata_backup_plugin", "appdata_backup_script"]
+
+# Task names mapped to display names.
+# [tasks.rename]
+# Display name.
+# backup = "Nightly backup"
+
+# Container and external service checks.
+[services]
+# Labels for Local, VPN and Public checks.
+columns = ["Local", "VPN", "Public"]
+# Service names or globs to skip entirely.
+ignore = []
+# Public name or IP to probe through configured relays.
+public_host = ""
+
+# One block per service check.
+# [[services.checks]]
+# Display name.
+# name = "Jellyfin"
+# Docker container name. Omit it for an external check.
+# container = "jellyfin"
+# Local HTTP or HTTPS probe URL.
+# url = "http://server.example.com:8096/health"
+# Text that an HTTP response must contain.
+# expect = ""
+# Public HTTP or HTTPS URL, checked through a relay when configured.
+# public_url = "https://jellyfin.example.com/health"
+# VPN HTTP or HTTPS probe URL.
+# vpn_url = ""
+# Local TCP target as host:port or [IPv6]:port.
+# tcp = ""
+# VPN TCP target.
+# vpn_tcp = ""
+# Public TCP target, checked through a relay when configured.
+# public_tcp = ""
+# Check period. External checks need at least 60 seconds. Omit for the global cycle.
+# every = 120
+
+# [[services.checks]]
+# Display name.
+# name = "Nextcloud"
+# Docker container name. Omit it for an external check.
+# container = "nextcloud"
+# Local HTTP or HTTPS probe URL.
+# url = "http://server.example.com:8443/status.php"
+# Text that an HTTP response must contain.
+# expect = "installed"
+
+# [[services.checks]]
+# Display name.
+# name = "Router"
+# Local TCP target as host:port or [IPv6]:port.
+# tcp = "192.0.2.1:443"
+# Check period. External checks need at least 60 seconds. Omit for the global cycle.
+# every = 300
+
+# Container restarts by /docker.
+[restarts]
+# Container-name globs /docker restart may touch. Empty disables restarts.
+allow = []
+
+# Group names mapped to container-name globs.
+# [restarts.groups]
+# Container-name globs.
+# media = ["jellyfin*", "reader"]
+
+# Code forges to monitor.
+# [[forges]]
+# Forge provider.
+# type = "forgejo"
+# Forge API base URL. Forgejo needs its server URL without /api/v1.
+# url = "https://forge.example.com"
+# Name of an environment variable.
+# token_env = "FORGEJO_TOKEN"
+# Tracked owner/name repositories.
+# repos = ["owner/repository"]
+# Features to show. The default includes every feature the provider supports.
+# show = []
+# Display name. Do not include a private address.
+# name = ""
+# Add a short System row. At most one forge may enable it.
+# system_row = false
+# Maximum displayed items per activity list.
+# latest = 5
+# Tracked repos shown first. They count toward latest.
+# pinned = []
+
+# Enabled activity kinds mapped to tracked repos to monitor.
+# [forges.filter]
+# Repos to monitor.
+# ci = []
+# Repos to monitor.
+# runs = []
+# Repos to monitor.
+# pushes = []
+# Repos to monitor.
+# issues = []
+
+# Signed host-helper connection. The key goes in .env, under the name that key_env sets.
+# [helper]
+# Unix socket path inside the bot container.
+# socket = "/run/shazzzbot-helper/helper.sock"
+# Name of an environment variable.
+# key_env = "SHAZZZBOT_HELPER_KEY"
+
+# Render mode per section. Unset sections use image mode.
+[render]
+# text, embed, or image.
+system = "image"
+# text, embed, or image.
+history = "image"
+# text, embed, or image.
+disks = "image"
+# text, embed, or image.
+services = "image"
+# text, embed, or image.
+docker = "image"
+# text, embed, or image.
+apps = "image"
+# text, embed, or image.
+tasks = "image"
+# text, embed, or image.
+forges = "image"
+
+# Warning and critical levels. One number sets warning only.
+[thresholds]
+# CPU and RAM use.
+resource = [80, 90]
+# Load average per CPU core.
+load = [0.7, 1.0]
+# CPU time waiting for disk I/O.
+iowait = [13, 24]
+# CPU temperature.
+temp = [80, 95]
+# Disk space used.
+disk_full = [90, 95]
+# Hard disk temperature.
+hdd_temp = [45, 55]
+# SSD temperature.
+ssd_temp = [60, 70]
+# Time a disk is busy. One number sets warning only.
+disk_busy = 95
+
+# Command permissions. Unlisted users and roles have no tier.
+[perms]
+
+# Allowed users and roles.
+[perms.view]
+# Allowed Discord role ids.
+roles = []
+# Allowed Discord user ids.
+users = []
+
+# Allowed users and roles.
+[perms.operate]
+# Allowed Discord role ids.
+roles = []
+# Allowed Discord user ids.
+users = []
+
+# Allowed users and roles.
+[perms.admin]
+# Allowed Discord role ids.
+roles = []
+# Allowed Discord user ids.
+users = []
+
+# Trusted terminal commands printed by /update. The bot never runs them.
+# [node_updates]
+
+# [node_updates.bot]
+# Node hostname or IP.
+# hostname = "server.example.com"
+# Host where the command is pasted. Omit to use hostname.
+# run_on = "server.example.com"
+# One trusted ASCII command line. The bot only prints it.
+# command = "d=$(mktemp -d) && curl -fsSL https://github.com/mrchrisneal/shazzzbot/releases/latest/download/source.tar.gz | tar -xz -C $d --strip-components=1 && bash $d/setup.sh --upgrade"
+
+# Authenticated config preview. Omit it to disable the page.
+# [preview]
+# Enable the authenticated preview page.
+# enabled = true
+# Container listen IP. compose.yaml publishes no port; add one on a single host address.
+# bind = "0.0.0.0"
+# Preview listen port.
+# port = 8780
+# Login name. Omit both credentials to generate a login.
+# user = ""
+# Password hash from python -m shazzzbot.preview hash.
+# password_hash = ""
+
+# One block per output channel. Channel ids must be different.
+[[outputs]]
+# Discord channel id.
+channel = 0
+# Sections to show, in the top-level order. Omit to show all.
+# sections = ["system", "history", "disks", "services", "docker", "apps", "tasks", "forges"]
+# Image period. Omit to inherit the global value.
+# image_every = 60
+# Edit period. Omit to inherit the global value.
+# edit_every = 60
+
+# Per-section overrides of the top-level [render].
+# [outputs.render]
+# text, embed, or image.
+# system = "image"
+# text, embed, or image.
+# history = "image"
+# text, embed, or image.
+# disks = "image"
+# text, embed, or image.
+# services = "image"
+# text, embed, or image.
+# docker = "image"
+# text, embed, or image.
+# apps = "image"
+# text, embed, or image.
+# tasks = "image"
+# text, embed, or image.
+# forges = "image"

@@ -1,0 +1,31 @@
+# Install with setup.sh --role relay; runtime files belong in private storage.
+# The first start logs RELAY_URL, RELAY_KEY and RELAY_FINGERPRINT for the bot's .env.
+name: shazzzbot_relay
+services:
+  relay:
+    build: .
+    image: shazzzbot:dev
+    labels: {org.shazzzbot.install: "${SHAZZZBOT_INSTALL_ID:?run setup.sh}"}
+    environment:
+      SHAZZZBOT_ROLE: relay
+      RELAY_ALLOW: ${RELAY_ALLOW:?set RELAY_ALLOW to the names this relay may probe}
+      # Extra bot API keys, separated by spaces; make each with 'openssl rand -hex 16'.
+      RELAY_KEYS: ${RELAY_KEYS:-}
+    ports:
+      - "${RELAY_BIND:-0.0.0.0}:8443:8443"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+networks:
+  default:
+    name: shazzzbot_relay_default
+    labels: {org.shazzzbot.install: "${SHAZZZBOT_INSTALL_ID:?run setup.sh}"}

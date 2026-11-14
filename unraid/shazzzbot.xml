@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>shazzzbot</Name>
+  <Repository>ghcr.io/mrchrisneal/shazzzbot:latest</Repository>
+  <Registry>https://github.com/mrchrisneal/shazzzbot/pkgs/container/shazzzbot</Registry>
+  <Network>shazzzbot</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/mrchrisneal/shazzzbot/issues</Support>
+  <Project>https://github.com/mrchrisneal/shazzzbot</Project>
+  <Overview>A Discord bot that keeps one self-updating status message for this Unraid server. This template runs the bot only. The Docker section and the /docker commands need the docker-proxy container, and the Tasks section needs the host helper. setup.sh in the repository sets up both. Without them the bot runs in bot-only mode: leave docker_proxy out of config.toml.</Overview>
+  <Category>Tools: Status:Stable</Category>
+  <WebUI/>
+  <TemplateURL>https://raw.githubusercontent.com/mrchrisneal/shazzzbot/main/unraid/shazzzbot.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/mrchrisneal/shazzzbot/main/assets/icon.png</Icon>
+  <ExtraParams>--read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true --memory 512m --pids-limit 128 --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 --group-add 10001</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <Requires>Create config.toml with mode 600 and owner 10001, and a data directory owned by 10001. Enter their absolute paths below. The helper uses /tmp/shazzzbot-helper/socket for its temporary socket. Create the shazzzbot Docker network before starting this bot-only template. setup.sh prepares these paths.</Requires>
+  <Config Name="Bot token" Target="DISCORD_TOKEN" Default="" Mode="" Description="The token from the Bot page of the Discord Developer Portal. Not used by the relay role." Type="Variable" Display="always" Required="false" Mask="true"></Config>
+  <Config Name="Config file" Target="/config/config.toml" Default="" Mode="ro" Description="Bot role: private config.toml outside exported shares, created before the first start. Unused by the relay role." Type="Path" Display="always" Required="false" Mask="false"></Config>
+  <Config Name="Data" Target="/data" Default="" Mode="rw" Description="Private persistent data directory. Owner must be user id 10001." Type="Path" Display="always" Required="true" Mask="false"></Config>
+  <Config Name="Host proc" Target="/host/proc" Default="/proc" Mode="ro" Description="Host CPU, memory, and process readings." Type="Path" Display="advanced" Required="true" Mask="false">/proc</Config>
+  <Config Name="Host sys" Target="/host/sys" Default="/sys" Mode="ro" Description="Host disk and sensor readings." Type="Path" Display="advanced" Required="true" Mask="false">/sys</Config>
+  <Config Name="Unraid state" Target="/host/emhttp" Default="/var/local/emhttp" Mode="ro" Description="Unraid array, disk, and share state." Type="Path" Display="advanced" Required="true" Mask="false">/var/local/emhttp</Config>
+  <Config Name="Helper socket directory" Target="/run/shazzzbot-helper" Default="/tmp/shazzzbot-helper/socket" Mode="ro" Description="Temporary helper socket. Docker can create the directory; the helper checks and normalizes its permissions in place." Type="Path" Display="advanced" Required="true" Mask="false">/tmp/shazzzbot-helper/socket</Config>
+  <Config Name="Node role" Target="SHAZZZBOT_ROLE" Default="bot|relay" Mode="" Description="bot runs the Discord bot. relay runs only the service-check relay: then set Relay names and Relay port, and the Discord, config, and host settings are not used." Type="Variable" Display="advanced" Required="true" Mask="false">bot</Config>
+  <Config Name="Relay names" Target="RELAY_ALLOW" Default="" Mode="" Description="Relay role only: the host names or IPs the relay may check, separated by spaces." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="Relay port" Target="8443" Default="" Mode="tcp" Description="Relay role only: the host port for the relay, usually 8443. Leave empty for the bot role." Type="Port" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="Helper key" Target="SHAZZZBOT_HELPER_KEY" Default="" Mode="" Description="The content of the helper api.key. Leave empty without the helper." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+</Container>

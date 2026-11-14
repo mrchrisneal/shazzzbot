@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net https://files.pythonhosted.org; style-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Shazzzbot Editor</title>
+<meta name="description" content="The Shazzzbot status panel as Discord shows it, rendered by the bot's own code, with a live settings editor.">
+<link rel="icon" href="icon.svg">
+<link rel="stylesheet" href="demo.css">
+</head>
+<body>
+<div class="app">
+  <header class="bar" id="bar">
+    <h1 class="bar-brand" aria-label="Shazzzbot Editor"><img src="icon.svg" alt="" width="24" height="24"><span class="bar-word">Shazzzbot<span class="bar-editor"> Editor</span></span></h1>
+    <div class="tabs" role="group" aria-label="Render mode">
+      <button type="button" class="tab" data-view="mixed" aria-pressed="false" data-tip="Set [render] to the sample mix: Tasks as embed fields, the rest as images">Mixed</button>
+      <button type="button" class="tab" data-view="image" aria-pressed="false" data-tip="Set every section in [render] to image: rendered PNG images">Image</button>
+      <button type="button" class="tab" data-view="rich" aria-pressed="false" data-tip="Set every section in [render] to embed: Discord embed fields">Rich</button>
+      <button type="button" class="tab" data-view="text" aria-pressed="false" data-tip="Set every section in [render] to text: monospace tables inside embeds">Text</button>
+    </div>
+    <select id="format-pick" class="select format-pick" aria-label="Render mode">
+      <option value="" disabled hidden>Custom</option>
+      <option value="mixed">Mixed</option>
+      <option value="image">Image</option>
+      <option value="rich">Rich</option>
+      <option value="text">Text</option>
+    </select>
+    <button type="button" class="chip" id="chip" aria-haspopup="dialog" aria-controls="play-dialog"><span class="profile-progress" id="chip-progress" hidden></span><span class="chip-text" id="chip-text">Profile</span></button>
+    <div class="bar-tools" id="bar-tools">
+      <div class="bar-play" role="group" aria-label="Frames">
+        <button type="button" class="icon-btn" id="prev" aria-label="Previous frame" data-tip="Show the previous sample frame"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <span class="profile-picker"><span class="profile-progress" id="picker-progress" hidden></span><select id="frame-pick" class="select" aria-label="Frame" data-tip="Live data from this host, or a named sample frame to test your settings against"></select></span>
+        <button type="button" class="icon-btn" id="next" aria-label="Next frame" data-tip="Show the next sample frame"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button type="button" class="icon-btn" id="play" aria-label="Pause" data-tip="Advance on the bot's own schedule, or hold this frame. Config changes always preview 300 ms after you stop typing"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 6v12M15 6v12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div class="bar-right" role="group" aria-label="Tools">
+        <button type="button" class="activity" id="activity" aria-label="Bot schedule" data-tip="Bot schedule" data-tip-tap><span class="spin" aria-hidden="true"></span><span id="activity-text" aria-live="polite"></span></button>
+        <button type="button" class="icon-btn" id="log-btn" aria-label="Log" aria-expanded="false" aria-controls="log-panel" data-tip="Show or hide the log: what the preview is doing, and the bot's own log when served by your bot"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <a class="icon-btn external-link" id="docs-icon" href="https://github.com/mrchrisneal/shazzzbot/wiki" target="_blank" rel="noopener noreferrer" aria-label="Docs (opens in a new tab)" data-tip="Shazzzbot documentation, in the wiki"><svg class="external-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></a>
+        <button type="button" class="icon-btn" id="settings-btn" popovertarget="settings-pop" aria-label="Preview settings" data-tip="Preview settings"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+    </div>
+    <button type="button" class="icon-btn bar-more" id="more" popovertarget="more-pop" aria-label="More"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="menu" id="more-pop" popover>
+      <div class="menu-actions">
+        <button type="button" class="action secondary" id="more-log">Log</button>
+        <a class="action secondary external-link" href="https://github.com/mrchrisneal/shazzzbot/wiki/Configuration" target="_blank" rel="noopener noreferrer">Config reference<svg class="external-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></a>
+        <button type="button" class="action secondary" popovertarget="settings-pop">Settings</button>
+      </div>
+    </div>
+    <div class="menu" id="settings-pop" popover>
+      <button type="button" class="switch" id="helper" role="switch" aria-checked="true" aria-describedby="helper-help" data-tip="Turn this on if the Shazzzbot host script is installed on the server. The bot then reads scheduled tasks and the UPS shutdown setting from it, and asks it for read-only data only. The script refuses reboot, shutdown, and array start or stop commands. Turn this off to see the panel as it looks without the script.">Host script installed<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span></button>
+      <p class="side-help menu-help" id="helper-help">Shows what the panel adds when the host script is installed.</p>
+      <button type="button" class="switch" id="cycle" role="switch" aria-checked="true" aria-describedby="cycle-help" data-tip="On: each simulated update moves to the next profile. Off: stay on the chosen profile and draw new values inside its ranges at each update.">Cycle profiles<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span></button>
+      <p class="side-help menu-help" id="cycle-help">Off keeps one profile and varies its values.</p>
+      <button type="button" class="switch" id="show-timing" role="switch" aria-checked="true" aria-describedby="timing-help" data-tip="Hide this bar to preview Discord without timing details.">Show timing bar<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span></button>
+      <p class="side-help menu-help" id="timing-help">Shows the next update, last successful update, and cycle for each embed.</p>
+      <div class="menu-actions">
+        <button type="button" class="action secondary" id="side" aria-expanded="true" aria-controls="sidebar">Hide settings</button>
+        <button type="button" class="action secondary" id="sched-btn">Update schedule</button>
+        <button type="button" class="action secondary" id="purge-cache" data-tip="Delete the downloaded preview files from this browser and load them again">Purge cache and reload</button>
+      </div>
+    </div>
+    <dialog class="play-dialog" id="play-dialog" aria-labelledby="play-title">
+      <div class="dialog-head"><h2 class="side-head" id="play-title">Sample profile</h2><button type="button" class="icon-btn" id="play-close" aria-label="Close"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+      <div id="play-slot"></div>
+    </dialog>
+    <dialog class="play-dialog" id="example-dialog" aria-labelledby="example-title">
+      <div class="dialog-head"><h2 class="side-head" id="example-title">Load example</h2></div>
+      <p class="side-help" id="example-text"></p>
+      <form method="dialog" class="dialog-actions">
+        <button type="submit" class="action secondary" value="cancel">Cancel</button>
+        <button type="submit" class="action primary" value="load" id="example-load">Load example</button>
+      </form>
+    </dialog>
+    <div class="pending" id="pending" role="progressbar" aria-label="Rendering the preview" hidden></div>
+  </header>
+  <div class="splash" id="splash">
+    <div class="ring-box" id="progress" role="progressbar" aria-label="Loading preview" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <svg class="ring" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><circle class="ring-track" cx="32" cy="32" r="28" fill="none" stroke-width="4"/><circle class="ring-value" id="ring" cx="32" cy="32" r="28" fill="none" stroke-width="4" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100" transform="rotate(-90 32 32)"/></svg>
+      <span class="ring-pct" id="pct" aria-hidden="true">0%</span>
+    </div>
+    <p class="splash-text" id="splash-text" aria-hidden="true">Loading preview</p>
+    <p class="sr-only" id="splash-live" aria-live="polite"></p>
+    <div class="splash-actions" id="splash-actions" hidden>
+      <button type="button" class="action primary" id="retry">Retry loading</button>
+      <button type="button" class="action secondary" id="purge">Purge cache and reload</button>
+    </div>
+    <p class="splash-note">Using this tool in a desktop browser is <strong>strongly</strong> recommended.</p>
+  </div>
+  <div class="panes">
+    <div class="chat-col">
+      <main class="chat-pane" id="stage"></main>
+      <section class="log-panel" id="log-panel" aria-label="Log" hidden>
+        <div class="log-head">
+          <h2 class="side-head">Log</h2>
+          <div class="tabs log-feeds" id="log-feeds" role="group" aria-label="Log feed" hidden>
+            <button type="button" class="tab" data-feed="combined" aria-pressed="true" data-tip="Activity and the app log together, in time order">Combined</button>
+            <button type="button" class="tab" data-feed="activity" aria-pressed="false" data-tip="What the preview and the bot are doing: renders, uploads, edits, and the next change">Activity</button>
+            <button type="button" class="tab" data-feed="app" aria-pressed="false" data-tip="The bot's own log, with secrets removed">App</button>
+          </div>
+          <select id="log-level" class="select" aria-label="Log level">
+            <option value="0">All levels</option>
+            <option value="30">Warning and up</option>
+            <option value="40">Errors only</option>
+          </select>
+          <button type="button" class="action secondary" id="log-pause" aria-pressed="false">Pause</button>
+          <button type="button" class="action secondary" id="log-copy">Copy</button>
+        </div>
+        <p class="side-help log-note" id="log-note">The app log appears when the editor is served by a running bot.</p>
+        <ol class="log-lines" id="log-lines"></ol>
+      </section>
+    </div>
+    <div class="sidebar-resize" id="sidebar-resize" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Config sidebar width" aria-controls="sidebar" aria-valuemin="320" aria-valuemax="720" aria-valuenow="380"></div>
+    <aside class="sidebar" id="sidebar" aria-labelledby="editor-title">
+      <section class="sidebar-section config-section" aria-labelledby="editor-title">
+        <div class="config-head">
+          <h2 class="side-head" id="editor-title">Config</h2>
+          <span id="save-state" class="save-state" role="status">Not saved</span>
+          <div class="config-actions">
+            <a class="action secondary docs-link external-link" id="docs-link" href="https://github.com/mrchrisneal/shazzzbot/wiki/Configuration" target="_blank" rel="noopener noreferrer" data-tip="Every setting, its values, and its default, in the wiki">Config reference<svg class="external-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="sr-only"> (opens in a new tab)</span></a>
+            <select id="example" class="select" aria-label="Load an example config" data-tip="Replace the editor contents with an example. Undo puts them back"><option value="">Load example</option></select>
+            <button type="button" class="action secondary" id="undo" disabled data-tip="Put back the config from before the last mode button or example">Undo</button>
+            <button type="button" class="action primary" id="save" disabled data-tip="Check the settings, then write them to config.toml. Other settings and comments stay as they are">Save to config.toml</button>
+          </div>
+        </div>
+        <div id="editor" class="editor"></div>
+        <span id="status" class="status" role="status"></span>
+      </section>
+      <section class="sidebar-section" aria-labelledby="sched-title">
+        <h2 class="side-head" id="sched-title" tabindex="-1">Update schedule</h2>
+        <p class="side-help">When the bot next changes each of its Discord messages, and what that costs against Discord's rate limits.</p>
+        <details class="sched-help">
+          <summary>How to read this</summary>
+          <p class="side-help">Discord limits how many requests a bot may send. The bot plans every change to fit under those limits instead of sending and being refused.</p>
+          <p class="side-help">Each Discord message costs one request each time it changes. A message with images changes only when its images upload: one <strong>Upload</strong> request carries all its images and its text, so four images cost the same as one. A message without images uses <strong>Edit</strong> on the edit cycle, and skips the request when nothing changed. Uploads from all messages stay at least 75 seconds apart.</p>
+          <p class="side-help">The boxed line adds this up: about how many requests the message costs per minute. Retries can add a few.</p>
+          <p class="side-help"><strong>Rate budget</strong> says where the limits come from: safe defaults for a new bot, or the limits this bot learned from Discord's replies.</p>
+        </details>
+        <div class="sched" id="sched">
+          <div id="sched-body"></div>
+          <div class="sched-foot" id="sched-state"></div>
+        </div>
+      </section>
+      <section class="sidebar-section sidebar-help" aria-labelledby="help-title">
+        <h2 class="side-head" id="help-title">Help</h2>
+        <details>
+          <summary>About this preview</summary>
+          <p class="side-help" id="lede">Sample data, rendered in your browser by the bot's own code. Edit the display settings to see the change.</p>
+        </details>
+        <details>
+          <summary>How validation works</summary>
+          <p class="side-help">TOML, checked by the bot's own config loader as you type. Only these keys can change here.</p>
+        </details>
+        <details>
+          <summary>Discord limits (checked 2026-11-14)</summary>
+          <p class="side-help">Per message: 10 embeds, 6000 characters of embed text in total, 25 fields per embed, and 4096 characters per description. Each file can be up to 20 MiB, and one request up to 25 MiB. A bot can send 50 requests a second in total; each channel's edit limit is lower and is not published, so the bot reads it from Discord's replies. The bot splits the panel across more messages to stay under the embed count and text limits.</p>
+          <p class="side-help">Measured on 2026-11-14 with one bot: a text edit and an image upload to the same message share one limit of 5 requests a second. Edits that carry images also meet an unpublished limit that counts uploads in every channel of the server. One upload every 75 seconds (48 an hour) held; refusals began near 65 uploads in an hour and asked for waits of 0.3 to 151 seconds. New messages with images were not refused.</p>
+        </details>
+        <details>
+          <summary>How rate limits are handled</summary>
+          <p class="side-help">Discord allows 50 requests a second per bot; the bot uses at most 45 and keeps a tenth of each route's limit in reserve. Uploads stay at least 75 seconds apart across all channels, which stays under the measured upload limit. After a rate limit, the bot spaces that route out further, then eases back by 5% an hour, so it follows Discord if its limits change.</p>
+        </details>
+      </section>
+    </aside>
+  </div>
+</div>
+<noscript><p class="notice">This page needs JavaScript.</p></noscript>
+<script type="module" src="demo.js"></script>
+</body>
+</html>

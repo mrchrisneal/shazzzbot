@@ -1,0 +1,22 @@
+[
+ {
+  "file": "examples/sample.toml",
+  "name": "Sample",
+  "help": "The sample mix: Services as embed fields, Tasks as text, the rest as images."
+ },
+ {
+  "file": "examples/no-images.toml",
+  "name": "No images",
+  "help": "Embeds and text only. One edit request per minute and no uploads."
+ },
+ {
+  "file": "examples/all-images.toml",
+  "name": "All images",
+  "help": "Every section as an image. Uploads only, at least 75 seconds apart."
+ },
+ {
+  "file": "examples/compact.toml",
+  "name": "Compact",
+  "help": "Five upcoming tasks, green dots for healthy rows, and History and Top Apps as text."
+ }
+]

@@ -1,0 +1,9 @@
+[run]
+source = shazzzbot, tools, shazzzbot-helper-unraid
+branch = True
+
+[report]
+# precision 2 makes fail_under exact; at 0 the total is rounded before the compare.
+precision = 2
+show_missing = True
+fail_under = 100

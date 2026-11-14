@@ -1,0 +1,120 @@
+# Builds the bot image on a v* tag and pushes it to GHCR as :vX.Y.Z and :latest.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-images
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  image:
+    if: ${{ startsWith(github.server_url, 'https://github.com') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Build and push
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "tag $TAG is not vX.Y.Z" >&2; exit 1; }
+          export GH_TOKEN="$TOKEN"
+          checks="$(mktemp)"
+          notes="$(mktemp)"
+          release_info="$(mktemp)"
+          trap 'rm -f -- "$checks" "$notes" "$release_info"' EXIT
+          timeout 30 gh api \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&status=success&per_page=1" \
+            > "$checks"
+          python3 -m tools.release_check ci "$SHA" "$checks"
+          version="$(python3 -m tools.release_check version VERSION)"
+          python3 -m tools.release_check versions "$TAG" "$version" "$version" "$version"
+          python3 -m tools.release_check notes "$TAG" CHANGELOG.md > "$notes"
+          printf '\n%s\n' 'Development happens in a private repository. This repository receives one commit per release. It may not be monitored regularly, and pull requests are disabled until Shazzzbot is confirmed stable. Shazzzbot supports Unraid only. Support for other systems, platforms, and integrations depends on feedback.' >> "$notes"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            timeout 30 gh release view "$TAG" --json isDraft,assets \
+              --jq '{draft:.isDraft, assets:.assets}' > "$release_info"
+            python3 -m tools.release_check draft "$release_info"
+          fi
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          export DOCKER_CONFIG
+          DOCKER_CONFIG="$(mktemp -d)"
+          downloads="$(mktemp -d)"
+          trap 'docker logout ghcr.io >/dev/null 2>&1 || true; rm -rf -- "$DOCKER_CONFIG" "$downloads"; rm -f -- "$checks" "$notes" "$release_info"' EXIT
+          printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          docker build --platform linux/amd64 \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$SHA" \
+            --label "org.opencontainers.image.version=$TAG" \
+            -t "$image:$TAG" .
+          bot_version="$(timeout 30 docker run --rm --network none --entrypoint python "$image:$TAG" \
+            -c 'from shazzzbot import __version__; print(__version__)')"
+          python3 tools/build_helper.py --bundle-dir . --version "$TAG" --revision "$SHA"
+          helper_version="$(python3 -c 'import sys; sys.path.insert(0, "helper.pyz"); from helper import VERSION; print(VERSION)')"
+          python3 -m tools.release_check versions "$TAG" "$version" "$bot_version" "$helper_version"
+          docker push "$image:$TAG"
+          digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$image:$TAG")"
+          [[ "$digest" =~ ^ghcr.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]
+          git archive --format=tar --prefix=shazzzbot/ "$SHA" | gzip -n > source.tar.gz
+          export RELEASE_IMAGE="$image:$TAG@${digest#*@}"
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          from shazzzbot.helper.formats import dump
+          data = dump({"version": os.environ["TAG"], "revision": os.environ["SHA"],
+                       "image": os.environ["RELEASE_IMAGE"]}, 1)
+          for name in ("source", "helper"):
+              path = Path("source.tar.gz" if name == "source" else "helper.pyz")
+              data[name + "_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+          data["platforms"] = {"unraid": hashlib.sha256(Path("helper-unraid.json").read_bytes()).hexdigest()}
+          Path("release.json").write_text(json.dumps(data, sort_keys=True) + "\n")
+          PY
+          sha256sum source.tar.gz helper.pyz helper-unraid.json shazzzbot-helper-unraid.py release.json > SHA256SUMS
+          export GH_TOKEN="$TOKEN"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --verify-tag --draft --latest=false --notes-file "$notes"
+          fi
+          timeout 30 gh release view "$TAG" --json isDraft,assets \
+              --jq '{draft:.isDraft, assets:.assets}' > "$release_info"
+          python3 -m tools.release_check draft "$release_info"
+          gh release edit "$TAG" --draft --notes-file "$notes"
+          gh release upload "$TAG" source.tar.gz helper.pyz helper-unraid.json shazzzbot-helper-unraid.py \
+            release.json SHA256SUMS --clobber
+          timeout 30 gh release view "$TAG" --json isDraft,assets \
+              --jq '{draft:.isDraft, assets:.assets}' > "$release_info"
+          python3 -m tools.release_check assets "$release_info" .
+          timeout 180 gh release download "$TAG" --dir "$downloads"
+          python3 -m tools.release_check downloads . "$downloads"
+          gh release edit "$TAG" --draft=false --latest=false --notes-file "$notes"
+          unset GH_TOKEN
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+          export GIT_CONFIG_VALUE_0
+          refs="$(git ls-remote --refs --tags origin)"
+          unset GIT_CONFIG_VALUE_0 GIT_CONFIG_KEY_0 GIT_CONFIG_COUNT
+          newest="$(printf '%s\n' "$refs" | sed -nE 's@.*refs/tags/(v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))$@\1@p' | sort -V | tail -1)"
+          if [ "$TAG" = "$newest" ]; then
+            docker tag "$image:$TAG" "$image:latest"
+            docker push "$image:latest"
+            GH_TOKEN="$TOKEN" gh release edit "$TAG" --latest
+          else
+            echo "Keeping latest on $newest instead of $TAG"
+          fi

@@ -1,0 +1,48 @@
+# Checks for every push and pull request on GitHub, on GitHub-hosted runners only.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: ${{ startsWith(github.server_url, 'https://github.com') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+        with:
+          python-version: "3.14"
+      - name: Install
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+      - name: Characters
+        run: python tools/ascii_guard.py --check
+      - name: Lint
+        run: ruff check --no-cache .
+      - name: Security lint
+        run: bandit -q -c .bandit.yaml -r shazzzbot
+      - name: Tests with the coverage floor
+        run: |
+          set -e
+          ./test.sh --cov --cov-report=term
+          node docs/demo/loader-test.mjs
+          node docs/demo/ticker-test.mjs
+          node docs/demo/bar-test.mjs
+          node docs/demo/tip-test.mjs
+          node docs/demo/preview-test.mjs
+          node docs/demo/boot-test.mjs
+          node docs/demo/lifecycle-test.mjs
+          node docs/demo/schema-test.mjs
+          node docs/demo/schedule-test.mjs
+          node docs/demo/renderedit-test.mjs

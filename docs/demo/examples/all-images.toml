@@ -1,0 +1,34 @@
+timezone = "UTC"
+green_ok = false
+order = ["system", "history", "disks", "services", "docker", "apps", "tasks", "forges"]
+
+[system]
+title = "Unraid System Info"
+subtitle = ""
+
+[render]
+system = "image"
+history = "image"
+disks = "image"
+services = "image"
+docker = "image"
+apps = "image"
+tasks = "image"
+forges = "image"
+
+[thresholds]
+resource = [80, 90]
+load = [0.7, 1.0]
+iowait = [13, 24]
+temp = [80, 95]
+disk_full = [90, 95]
+hdd_temp = [45, 55]
+ssd_temp = [60, 70]
+disk_busy = 95
+
+[tasks]
+shown = 20
+long_running_minutes = 60
+
+[services]
+columns = ["Local", "VPN", "Public"]

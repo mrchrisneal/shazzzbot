@@ -1,0 +1,12 @@
+# Allowlist: only what the image needs. Keeps .env and config.toml out of the build context.
+*
+!requirements.txt
+!VERSION
+!shazzzbot/
+!assets/icon.png
+shazzzbot/**/__pycache__
+!tools/preview_assets.py
+!docs/demo/
+docs/demo/frames/
+docs/demo/frames.json
+docs/demo/pyodide/

@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable, Mapping
+from typing import Any, Protocol
+
+Query = Callable[[list[str]], Awaitable[list[str]]]
+
+
+class Platform(Protocol):
+    @property
+    def operations(self) -> Mapping[str, Mapping[str, Any]]: ...
+    @property
+    def readonly(self) -> frozenset[str]: ...
+
+
+    async def ensure_safe(self, accept_flash_share: bool = False) -> None: ...
+    def target(self, family: str, args: dict[str, Any]) -> str: ...
+    async def resolve(self, family: str, op: str, name: str, cfg: dict[str, Any], query: Query) -> list[str]: ...
+    async def read(self, action: str, timeout: float, cap: int) -> dict[str, Any]: ...
