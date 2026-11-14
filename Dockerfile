@@ -1,4 +1,4 @@
-FROM python:3.14.10-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS preview
+FROM python:3.15.0-slim@sha256:f5b92f2a669a4c347044f29367f31983280b648250ca94dea66f98c53bc87e58 AS preview
 WORKDIR /src
 COPY VERSION ./VERSION
 COPY shazzzbot ./shazzzbot
@@ -6,7 +6,7 @@ COPY tools/preview_assets.py ./tools/preview_assets.py
 COPY docs/demo/runtime.json ./docs/demo/runtime.json
 RUN python -m tools.preview_assets --out /pyodide
 
-FROM python:3.14.10-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
+FROM python:3.15.0-slim@sha256:f5b92f2a669a4c347044f29367f31983280b648250ca94dea66f98c53bc87e58
 RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
