@@ -1,0 +1,23 @@
+# Secrets and runtime state.
+.env
+.env.*
+!.env.example
+config.toml
+config.*.toml
+!config.example.toml
+data/
+*.pem
+
+# Python and tool caches.
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.scan/
+
+# Local browser-automation output.
+.playwright-mcp/
+docs/demo/pyodide/

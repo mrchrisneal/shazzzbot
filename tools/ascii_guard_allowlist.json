@@ -1,0 +1,10 @@
+[
+  {
+    "path": "tools/ascii_guard.py",
+    "kind": "comment-metadata",
+    "text": "#8212",
+    "line_text": "    r\"|&#([0-9]+);\"                     # HTML &#8212;",
+    "column": 49,
+    "reason": "Not a task reference: 8212 is the em dash codepoint, the worked example for the HTML numeric-entity regex branch on the same line. reviewed 2026-11"
+  }
+]

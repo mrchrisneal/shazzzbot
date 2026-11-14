@@ -1,0 +1,94 @@
+# Publishes the preview site (docs/demo) to GitHub Pages on each push to main. Analytics are added here only.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ startsWith(github.server_url, 'https://github.com') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Stage
+        run: |
+          set -e
+          mkdir -p site/docs
+          cp -r docs/demo site/docs/demo
+          printf '%s\n' '<!doctype html><meta charset="utf-8"><title>Shazzzbot</title>' \
+            '<meta http-equiv="refresh" content="0; url=docs/demo/"><a href="docs/demo/">Shazzzbot config editor</a>' \
+            > site/index.html
+      - name: Analytics (public site only)
+        env:
+          HOST: ${{ vars.PAGES_HOST }}
+          CF_BEACON: ${{ vars.CF_BEACON_TOKEN }}
+          GA_ID: ${{ vars.GA_MEASUREMENT_ID }}
+        run: |
+          set -e
+          [ -n "$HOST" ] || exit 0
+          python3 - <<'EOF'
+          import json, os, re, pathlib
+          host, cf, ga = os.environ["HOST"], os.environ.get("CF_BEACON", ""), os.environ.get("GA_ID", "")
+          assert re.fullmatch(r"[a-z0-9.-]+", host), "bad PAGES_HOST"
+          assert not cf or re.fullmatch(r"[0-9a-f]{32}", cf), "bad CF_BEACON_TOKEN"
+          assert not ga or re.fullmatch(r"G-[A-Z0-9]{4,16}", ga), "bad GA_MEASUREMENT_ID"
+          if not (cf or ga):
+              raise SystemExit(0)
+          demo = pathlib.Path("site/docs/demo")
+          js = [f"if (location.hostname === {json.dumps(host)}) {{",
+                "  const add = (src, attrs = {}) => {",
+                "    const s = Object.assign(document.createElement('script'), { src, defer: true });",
+                "    for (const [k, v] of Object.entries(attrs)) s.setAttribute(k, v);",
+                "    document.head.appendChild(s);",
+                "  };"]
+          if cf:
+              js.append(f"  add('https://static.cloudflareinsights.com/beacon.min.js', "
+                        f"{{ 'data-cf-beacon': JSON.stringify({{ token: {json.dumps(cf)} }}) }});")
+          if ga:
+              js += [f"  add('https://www.googletagmanager.com/gtag/js?id={ga}');",
+                     "  window.dataLayer = window.dataLayer || [];",
+                     "  window.gtag = function () { window.dataLayer.push(arguments); };",
+                     f"  window.gtag('js', new Date()); window.gtag('config', {json.dumps(ga)});"]
+          js.append("}")
+          (demo / "analytics.js").write_text("\n".join(js) + "\n")
+          page = demo / "index.html"
+          text = page.read_text()
+          extra = {"script-src": [], "connect-src": [], "img-src": []}
+          if cf:
+              extra["script-src"].append("https://static.cloudflareinsights.com")
+              extra["connect-src"].append("https://cloudflareinsights.com")
+          if ga:
+              extra["script-src"].append("https://www.googletagmanager.com")
+              extra["connect-src"] += ["https://*.google-analytics.com", "https://*.analytics.google.com",
+                                       "https://www.googletagmanager.com"]
+              extra["img-src"] += ["https://*.google-analytics.com", "https://www.googletagmanager.com"]
+          for directive, sources in extra.items():
+              if sources:
+                  text, n = re.subn(rf"({directive} [^;\"]*)", lambda m: m[1] + " " + " ".join(sources), text, 1)
+                  assert n == 1, directive
+          text, n = re.subn(r"</head>", '<script src="analytics.js"></script>\n</head>', text, 1)
+          assert n == 1
+          page.write_text(text)
+          EOF
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1

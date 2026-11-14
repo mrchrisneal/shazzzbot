@@ -1,0 +1,4 @@
+# Test fixture key "0123456789abcdef"*2, replaced in 253a0d2; not a secret. reviewed 2026-11
+ea4c0ca066b904b0695d0b063b8cf786d60ab3f3:tests/test_relay.py:generic-api-key:364
+# generic-api-key -- test fixture fake key; reviewed 2026-11
+cda59c48f35a7facb05d701f5613d58059cfc9de:tests/test_secret_scan_optional.py:generic-api-key:44

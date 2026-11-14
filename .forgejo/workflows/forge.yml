@@ -1,0 +1,320 @@
+# Self-hosted pipeline for the private Forgejo instance; the gate on each job keeps it off GitHub.
+name: forge
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A push supersedes the previous push; a dispatch is its own question and queues instead.
+concurrency:
+  group: forge-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  suite:
+    if: ${{ !startsWith(github.server_url, 'https://github.com') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+
+      # The job image has no Python 3.14, so this runs in the Dockerfile's base image, as test.sh does.
+      # The workspace is a named volume, hence --volumes-from rather than a bind of $PWD.
+      - name: Tests with the coverage floor (.coveragerc), then mypy
+        env:
+          CC_DATA_DIR: ${{ secrets.CC_DATA_DIR }}
+        run: |
+          coverage_mount=()
+          if [ "${GITHUB_REF:-}" = refs/heads/main ] && [ -n "$CC_DATA_DIR" ]; then
+            if coverage_volume=$(timeout 30 docker volume create --label shazzzbot.ci.coverage=true); then
+              echo "COVERAGE_VOLUME=$coverage_volume" >> "$GITHUB_ENV"
+              coverage_mount=(-v "$coverage_volume:/coverage")
+            else
+              echo 'WARNING: CodeCharta coverage volume could not be created' >&2
+            fi
+          fi
+          img="$(sed -n 's/^FROM \([^ ]*\).*/\1/p' Dockerfile | head -1)"
+          docker run --rm --volumes-from "$HOSTNAME:ro" "${coverage_mount[@]}" -w "$PWD" --cpus 4 --memory 3g \
+            -e PYTHONDONTWRITEBYTECODE=1 -e COVERAGE_FILE=/tmp/.coverage "$img" sh -ec '
+              pip install -q --root-user-action=ignore --disable-pip-version-check -r requirements-dev.txt
+              python -m pytest -p no:cacheprovider --durations=25 --cov --cov-report=term
+              if [ -d /coverage ]; then
+                python -m coverage xml --rcfile=/dev/null -o /coverage/shazzzbot.xml ||
+                  echo "WARNING: CodeCharta coverage XML could not be exported" >&2
+              fi
+              python -m mypy --cache-dir=/tmp/mypy shazzzbot'
+
+      - name: Preview loader tests
+        run: |
+          set -e
+          node docs/demo/loader-test.mjs
+          node docs/demo/ticker-test.mjs
+          node docs/demo/bar-test.mjs
+          node docs/demo/tip-test.mjs
+          node docs/demo/preview-test.mjs
+          node docs/demo/boot-test.mjs
+          node docs/demo/lifecycle-test.mjs
+          node docs/demo/schema-test.mjs
+          node docs/demo/schedule-test.mjs
+          node docs/demo/renderedit-test.mjs
+
+      - name: Refresh CodeCharta coverage overlay
+        if: success() && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          CC_DATA_DIR: ${{ secrets.CC_DATA_DIR }}
+        run: |
+          set -euo pipefail
+          [ -n "$CC_DATA_DIR" ] || exit 0
+          [ -n "${COVERAGE_VOLUME:-}" ] || exit 0
+          timeout 120 docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$COVERAGE_VOLUME:/coverage:ro" -v "$CC_DATA_DIR:/out" \
+            codecharta/codecharta-analysis@sha256:ae97d9425ef81c00b52947a1d9d1c7cad1346204a3a288ef4fb90f07b7efd2b1 \
+            ccsh coverageimport -f=cobertura -klp /coverage/shazzzbot.xml -o /out/shazzzbot.coverage.cc.json
+          timeout 120 docker run --rm -i --user "$(id -u):$(id -g)" -v "$CC_DATA_DIR:/out" \
+            codecharta/codecharta-analysis@sha256:ae97d9425ef81c00b52947a1d9d1c7cad1346204a3a288ef4fb90f07b7efd2b1 sh -es <<'SH'
+          set --
+          cd /out
+          for f in shazzzbot.*.cc.json shazzzbot.*.cc.json.gz; do
+            case "$f" in shazzzbot.merged.cc.json|shazzzbot.merged.cc.json.gz) continue ;; esac
+            [ -e "$f" ] || continue
+            set -- "$@" "$f"
+          done
+          [ "$#" -gt 0 ] || exit 0
+          ccsh merge "$@" -o shazzzbot.merged.cc.json
+          SH
+
+      - name: Refresh Dependency-Track SBOM
+        if: success() && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          DT_API_KEY: ${{ secrets.DT_API_KEY }}
+          DT_ENDPOINT: ${{ secrets.DT_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DT_API_KEY" ] || [ -z "$DT_ENDPOINT" ]; then exit 0; fi
+          timeout 120 python3 -m pip install --user --quiet --disable-pip-version-check 'cyclonedx-bom==7.4.0'
+          sbom=$(mktemp)
+          payload=$(mktemp)
+          trap 'rm -f "$sbom" "$payload"' EXIT
+          timeout 30 python3 -m cyclonedx_py requirements requirements.txt -o "$sbom" --output-format json
+          python3 - "$sbom" "$payload" <<'PY'
+          import base64
+          import json
+          import pathlib
+          import sys
+          bom = base64.b64encode(pathlib.Path(sys.argv[1]).read_bytes()).decode("ascii")
+          pathlib.Path(sys.argv[2]).write_text(json.dumps({
+              "projectName": "shazzzbot", "projectVersion": "main", "autoCreate": True, "bom": bom,
+          }))
+          PY
+          printf 'X-Api-Key: %s\n' "$DT_API_KEY" | timeout 30 curl --fail --silent --show-error --max-time 20 \
+            --proto '=http,https' -X PUT -H @- -H "Content-Type: application/json" \
+            --write-out 'Dependency-Track SBOM upload HTTP status: %{http_code}\n' --output /dev/null \
+            --data-binary "@$payload" "$DT_ENDPOINT"
+
+      - name: Remove temporary coverage volume
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 1
+        run: |
+          [ -n "${COVERAGE_VOLUME:-}" ] || exit 0
+          timeout 30 docker volume rm "$COVERAGE_VOLUME"
+
+      # Never fails the build; the payload is built from the environment, never by expression expansion.
+      - name: Report the result back to the developer session
+        if: always()
+        continue-on-error: true
+        env:
+          CI_URL: ${{ secrets.CI_LISTENER_URL }}
+          CI_TOKEN: ${{ secrets.CI_LISTENER_TOKEN }}
+          CI_REPO: ${{ github.repository }}
+          CI_RUN: ${{ github.run_number }}
+          CI_RESULT: ${{ job.status }}
+          CI_JOB: forge/suite
+        run: |
+          [ -n "$CI_URL" ] || exit 0
+          payload=$(python3 -c 'import json,os; e=os.environ.get; print(json.dumps({
+            "repo": e("CI_REPO",""), "run": e("CI_RUN",""), "workflow": e("CI_JOB",""),
+            "conclusion": e("CI_RESULT",""), "branch": e("GITHUB_REF_NAME",""), "sha": e("GITHUB_SHA","")[:8]}))')
+          curl -s -m 5 --retry 3 --retry-connrefused -X POST -H "X-CI-Token: $CI_TOKEN" \
+               -H "Content-Type: application/json" -d "$payload" "$CI_URL" || true
+
+  scan:
+    if: ${{ !startsWith(github.server_url, 'https://github.com') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          fetch-depth: 0               # gitleaks reads the whole history
+          persist-credentials: false
+
+      - name: Cache the scanner toolchain
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/scan-tools
+          key: scan-tools-semgrep1.172.0-zizmor1.29.0-gitleaks8.28.0-trivy0.73.0-shellcheck0.11.0-osv2.4.0-bearer2.1.0
+
+      # Blocking: a scanner that never installed must not read as a clean scan.
+      - name: Install the scanners, and prove each one runs
+        run: |
+          set -euo pipefail
+          mkdir -p .scan
+          python3 -m pip install --quiet --disable-pip-version-check bandit==1.9.4 semgrep==1.172.0 \
+            zizmor==1.29.0 "$(grep '^ruff==' requirements-dev.in)"
+          TOOLS="$HOME/.cache/scan-tools"; mkdir -p "$TOOLS"
+          echo "TOOLS=$TOOLS" >> "$GITHUB_ENV"
+          get() { [ -s "$2" ] && return 0; curl -sSL --fail --retry 3 --retry-delay 2 -o "$2" "$1"; }
+          get https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz "$TOOLS/gitleaks.tar.gz"
+          [ -x "$TOOLS/gitleaks" ] || tar -xzf "$TOOLS/gitleaks.tar.gz" -C "$TOOLS" gitleaks
+          get https://github.com/aquasecurity/trivy/releases/download/v0.73.0/trivy_0.73.0_Linux-64bit.tar.gz "$TOOLS/trivy.tar.gz"
+          [ -x "$TOOLS/trivy" ] || tar -xzf "$TOOLS/trivy.tar.gz" -C "$TOOLS" trivy
+          get https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz "$TOOLS/shellcheck.tar.xz"
+          [ -x "$TOOLS/shellcheck" ] || tar -xJf "$TOOLS/shellcheck.tar.xz" -C "$TOOLS" --strip-components=1 shellcheck-v0.11.0/shellcheck
+          get https://github.com/google/osv-scanner/releases/download/v2.4.0/osv-scanner_linux_amd64 "$TOOLS/osv-scanner"
+          chmod +x "$TOOLS/osv-scanner"
+          get https://github.com/Bearer/bearer/releases/download/v2.1.0/bearer_2.1.0_linux_amd64.tar.gz "$TOOLS/bearer.tar.gz"
+          [ -x "$TOOLS/bearer" ] || tar -xzf "$TOOLS/bearer.tar.gz" -C "$TOOLS" bearer
+          bandit --version | head -1
+          semgrep --version
+          zizmor --version
+          ruff --version
+          "$TOOLS/gitleaks" version
+          "$TOOLS/trivy" --version | head -1
+          "$TOOLS/shellcheck" --version | grep version:
+          "$TOOLS/osv-scanner" --version | head -1
+          env -u LANGUAGE "$TOOLS/bearer" version --disable-version-check 2>&1 | tail -1
+
+      # Every scanner writes a .rc receipt whatever its outcome; `|| rc=$?` keeps `bash -e` from skipping it.
+      # The lock is what the Dockerfile's interpreter actually resolves, so both audits read real versions.
+      - name: Dependency vulnerabilities (pip-audit, then osv-scanner on the same lock)
+        continue-on-error: true
+        run: |
+          img="$(sed -n 's/^FROM \([^ ]*\).*/\1/p' Dockerfile | head -1)"
+          rc=0; docker run --rm --volumes-from "$HOSTNAME" -w "$PWD" --cpus 4 --memory 3g "$img" sh -ec '
+            python -m venv /tmp/app
+            /tmp/app/bin/pip install -q --disable-pip-version-check -r requirements-dev.txt
+            /tmp/app/bin/pip freeze > .scan/lock.txt
+            pip install -q --root-user-action=ignore --disable-pip-version-check pip-audit==2.10.1
+            pip-audit --disable-pip --no-deps -r .scan/lock.txt -f json -o .scan/pip-audit.json --desc' || rc=$?
+          echo "$rc" > .scan/pip-audit.rc
+          [ -s .scan/lock.txt ] || { echo "no lock was produced -- refusing to scan nothing" >&2; exit 1; }
+          rc=0; "$TOOLS/osv-scanner" scan source --format json --output .scan/osv.json \
+            -L "requirements.txt:.scan/lock.txt" || rc=$?
+          echo "$rc" > .scan/osv.rc
+
+      - name: Python SAST (bandit)
+        continue-on-error: true
+        run: |
+          rc=0; bandit -c .bandit.yaml --severity-level medium -r shazzzbot/ -f json -o .scan/bandit.json || rc=$?
+          echo "$rc" > .scan/bandit.rc
+
+      - name: Secrets in the whole history (gitleaks)
+        continue-on-error: true
+        run: |
+          rc=0; "$TOOLS/gitleaks" detect --source . --config .gitleaks.toml --no-banner --redact \
+            --report-format json --report-path .scan/gitleaks.json --exit-code 0 || rc=$?
+          echo "$rc" > .scan/gitleaks.rc
+
+      - name: Filesystem, secret and misconfiguration scan (trivy fs)
+        continue-on-error: true
+        run: |
+          rc=0; "$TOOLS/trivy" fs --scanners vuln,secret,misconfig --skip-dirs .scan --no-progress \
+            --format json --output .scan/trivy-fs.json . || rc=$?
+          echo "$rc" > .scan/trivy-fs.rc
+
+      # Builds the shipped image on the runner's daemon and scans it; the tag is removed afterwards.
+      - name: Image vulnerabilities (docker build, trivy image)
+        continue-on-error: true
+        run: |
+          rc=0; docker build -q -t shazzzbot:forge-scan . || rc=$?
+          [ "$rc" = 0 ] && { "$TOOLS/trivy" image --scanners vuln --ignore-unfixed --no-progress \
+            --format json --output .scan/trivy-image.json shazzzbot:forge-scan || rc=$?; }
+          echo "$rc" > .scan/trivy-image.rc
+
+      - name: Remove the scanned image
+        if: always()
+        continue-on-error: true
+        run: docker image rm shazzzbot:forge-scan >/dev/null 2>&1 || true
+
+      # --metrics=off keeps the run local; --timeout stops a slow rule silently contributing nothing.
+      - name: SAST (semgrep)
+        continue-on-error: true
+        run: |
+          rc=0; semgrep scan --config=p/default --metrics=off --quiet --timeout=120 \
+            --json --output .scan/semgrep.json . || rc=$?
+          echo "$rc" > .scan/semgrep.rc
+
+      # With no file arguments shellcheck reads stdin and hangs, so an empty list fails instead.
+      - name: Shell scripts (shellcheck)
+        continue-on-error: true
+        run: |
+          mapfile -t sh < <(git ls-files '*.sh')
+          [ "${#sh[@]}" -gt 0 ] || { echo "no shell scripts found" >&2; exit 1; }
+          rc=0; "$TOOLS/shellcheck" -f json1 -S style "${sh[@]}" > .scan/shellcheck.json || rc=$?
+          echo "$rc" > .scan/shellcheck.rc
+
+      # --offline: Actions exports a non-GitHub token that otherwise sends zizmor to the network.
+      - name: CI workflow hardening (zizmor)
+        continue-on-error: true
+        run: |
+          rc=0; zizmor --offline --format json .github/ .forgejo/workflows/ > .scan/zizmor.json || rc=$?
+          echo "$rc" > .scan/zizmor.rc
+
+      # env -u LANGUAGE: bearer reads that variable as its --language flag.
+      # tools/ is skipped: dev scripts open the paths the developer passes them. bandit and semgrep still scan it.
+      - name: Sensitive data flow (bearer)
+        continue-on-error: true
+        run: |
+          rc=0; env -u LANGUAGE "$TOOLS/bearer" scan . --format json --output .scan/bearer.json \
+            --disable-version-check --quiet --language python --skip-path 'tests/*,tools/*,.scan/*' || rc=$?
+          echo "$rc" > .scan/bearer.rc
+
+      - name: Lint (ruff)
+        continue-on-error: true
+        run: |
+          rc=0; ruff check --no-cache --output-format json . > .scan/ruff.json || rc=$?
+          echo "$rc" > .scan/ruff.rc
+
+      - name: Summarise what the scanners found
+        if: always()
+        run: python3 tools/scan_summary.py
+
+      # Deterministic gates run after the summary, so a failure here never skips a scanner.
+      - name: Characters (ascii_guard)
+        if: always()
+        run: python3 tools/ascii_guard.py --check
+
+      - name: Carry the findings into the report
+        if: always()
+        continue-on-error: true
+        run: echo "CI_FINDINGS=$(cat .scan/summary.line 2>/dev/null || echo unavailable)" >> "$GITHUB_ENV"
+
+      - name: Report the result back to the developer session
+        if: always()
+        continue-on-error: true
+        env:
+          CI_URL: ${{ secrets.CI_LISTENER_URL }}
+          CI_TOKEN: ${{ secrets.CI_LISTENER_TOKEN }}
+          CI_REPO: ${{ github.repository }}
+          CI_RUN: ${{ github.run_number }}
+          CI_RESULT: ${{ job.status }}
+          CI_JOB: forge/scan
+        run: |
+          [ -n "$CI_URL" ] || exit 0
+          payload=$(python3 -c 'import json,os; e=os.environ.get; print(json.dumps({
+            "repo": e("CI_REPO",""), "run": e("CI_RUN",""), "workflow": e("CI_JOB",""),
+            "conclusion": e("CI_RESULT",""), "findings": e("CI_FINDINGS",""),
+            "branch": e("GITHUB_REF_NAME",""), "sha": e("GITHUB_SHA","")[:8]}))')
+          curl -s -m 5 --retry 3 --retry-connrefused -X POST -H "X-CI-Token: $CI_TOKEN" \
+               -H "Content-Type: application/json" -d "$payload" "$CI_URL" || true

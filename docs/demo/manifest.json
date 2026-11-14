@@ -1,0 +1,116 @@
+{
+ "stamp": "8c79db527d22",
+ "runtime": [
+  {
+   "name": "pyodide.mjs",
+   "bytes": 17931,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.mjs"
+  },
+  {
+   "name": "pyodide.asm.mjs",
+   "bytes": 1250344,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.asm.mjs"
+  },
+  {
+   "name": "pyodide.asm.wasm",
+   "bytes": 9598218,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.asm.wasm"
+  },
+  {
+   "name": "python_stdlib.zip",
+   "bytes": 2545637,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/python_stdlib.zip"
+  },
+  {
+   "name": "pyodide-lock.json",
+   "bytes": 119077,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide-lock.json"
+  },
+  {
+   "name": "aiohappyeyeballs-2.6.1-py3-none-any.whl",
+   "bytes": 15265,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/aiohappyeyeballs-2.6.1-py3-none-any.whl"
+  },
+  {
+   "name": "aiohttp-3.13.5-cp314-cp314-pyemscripten_2026_0_wasm32.whl",
+   "bytes": 372252,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/aiohttp-3.13.5-cp314-cp314-pyemscripten_2026_0_wasm32.whl"
+  },
+  {
+   "name": "aiosignal-1.4.0-py3-none-any.whl",
+   "bytes": 7490,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/aiosignal-1.4.0-py3-none-any.whl"
+  },
+  {
+   "name": "async_timeout-5.0.1-py3-none-any.whl",
+   "bytes": 6233,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/async_timeout-5.0.1-py3-none-any.whl"
+  },
+  {
+   "name": "attrs-26.1.0-py3-none-any.whl",
+   "bytes": 67548,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/attrs-26.1.0-py3-none-any.whl"
+  },
+  {
+   "name": "charset_normalizer-3.4.7-py3-none-any.whl",
+   "bytes": 61958,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/charset_normalizer-3.4.7-py3-none-any.whl"
+  },
+  {
+   "name": "frozenlist-1.8.0-cp314-cp314-pyemscripten_2026_0_wasm32.whl",
+   "bytes": 32272,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/frozenlist-1.8.0-cp314-cp314-pyemscripten_2026_0_wasm32.whl"
+  },
+  {
+   "name": "idna-3.11-py3-none-any.whl",
+   "bytes": 71008,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/idna-3.11-py3-none-any.whl"
+  },
+  {
+   "name": "multidict-6.7.1-cp314-cp314-pyemscripten_2026_0_wasm32.whl",
+   "bytes": 27741,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/multidict-6.7.1-cp314-cp314-pyemscripten_2026_0_wasm32.whl"
+  },
+  {
+   "name": "pillow-12.2.0-cp314-cp314-pyemscripten_2026_0_wasm32.whl",
+   "bytes": 1037806,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pillow-12.2.0-cp314-cp314-pyemscripten_2026_0_wasm32.whl"
+  },
+  {
+   "name": "propcache-0.4.1-py3-none-any.whl",
+   "bytes": 13305,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/propcache-0.4.1-py3-none-any.whl"
+  },
+  {
+   "name": "six-1.17.0-py2.py3-none-any.whl",
+   "bytes": 11050,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/six-1.17.0-py2.py3-none-any.whl"
+  },
+  {
+   "name": "typing_extensions-4.15.0-py3-none-any.whl",
+   "bytes": 44613,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/typing_extensions-4.15.0-py3-none-any.whl"
+  },
+  {
+   "name": "tzdata-2025.3-py2.py3-none-any.whl",
+   "bytes": 348521,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/tzdata-2025.3-py2.py3-none-any.whl"
+  },
+  {
+   "name": "yarl-1.23.0-cp314-cp314-pyemscripten_2026_0_wasm32.whl",
+   "bytes": 71419,
+   "url": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/yarl-1.23.0-cp314-cp314-pyemscripten_2026_0_wasm32.whl"
+  },
+  {
+   "name": "py_cord-2.8.1-py3-none-any.whl",
+   "bytes": 1264633,
+   "url": "https://files.pythonhosted.org/packages/e3/a6/7aeceb7dfa04c0d390b89ea0b4b980963b93cd972ab6306ad9684811dc6c/py_cord-2.8.1-py3-none-any.whl"
+  }
+ ],
+ "vendor": [
+  {
+   "path": "vendor/codemirror.js",
+   "bytes": 403429
+  }
+ ]
+}
