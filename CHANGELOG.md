@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.1
+Released on November 14, 2026
+
+- FIX: Answer a slash command used outside the bot's channels with a private reply that names them, and end the wait of its autocomplete.
+- FIX: Suggest in `/docker restart` only the containers that `restarts.allow` permits.
+- FEAT: Warn in the log and in the audit channel at start when Discord lets members use the bot's commands outside its channels.
+- DOCS: Explain how to limit the commands of each bot to its own channels.
+
 ## 1.0.0
 Released on November 14, 2026
 

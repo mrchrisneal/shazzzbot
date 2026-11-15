@@ -18,6 +18,7 @@ import pytest
 from shazzzbot import bot as B
 from shazzzbot import (
     charts,
+    discordauth,
     forges,
     health,
     jellyfin,
@@ -185,6 +186,7 @@ def test_on_ready_leaves_foreign_guilds_and_starts_once(tmp_path, monkeypatch):
     monkeypatch.setattr(B.Bot, "guilds", [home, other])
     b = make_bot(tmp_path)
     b.panel_loop = MagicMock(is_running=MagicMock(side_effect=[False, True]))  # type: ignore[method-assign]
+    b.check_command_channels = AsyncMock()  # type: ignore[method-assign]
 
     async def go():
         await b.on_ready()
@@ -193,6 +195,62 @@ def test_on_ready_leaves_foreign_guilds_and_starts_once(tmp_path, monkeypatch):
     other.leave.assert_awaited()
     home.leave.assert_not_awaited()
     b.panel_loop.start.assert_called_once_with()
+    b.check_command_channels.assert_awaited_once_with()
+
+
+APP = 9001
+ALL = GUILD - 1
+
+
+def chan(cid, ok):
+    return {"id": str(cid), "type": 3, "permission": ok}
+
+
+@pytest.mark.parametrize("entries, warns", [
+    ([{"id": str(APP), "permissions": [chan(ALL, False), chan(PANEL, True), chan(43, True)]}], False),
+    ([{"id": str(APP), "permissions": [chan(ALL, False), chan(PANEL, True)]}], False),
+    ([], True),
+    ([{"id": "777", "permissions": [chan(ALL, False), chan(PANEL, True)]}], True),
+    ([{"id": str(APP), "permissions": [chan(PANEL, True)]}], True),
+    ([{"id": str(APP), "permissions": [chan(ALL, False)]}], True),
+    ([{"id": str(APP), "permissions": [chan(ALL, False), chan(PANEL, True), chan(99, True)]}], True),
+])
+def test_command_channel_check(tmp_path, monkeypatch, entries, warns):
+    b = make_bot(tmp_path, commands_channel_id=43)
+    monkeypatch.setattr(B.Bot, "application_id", APP)
+    monkeypatch.setattr(b.http, "get_guild_application_command_permissions", AsyncMock(return_value=entries))
+    audit = SimpleNamespace(send=AsyncMock())
+    monkeypatch.setattr(b, "audit_channel", lambda: audit)
+    asyncio.run(b.check_command_channels())
+    assert audit.send.await_count == int(warns)
+    if warns:
+        assert f"allow only <#{PANEL}>, <#43>." in audit.send.await_args.args[0]
+
+
+def test_command_channel_check_survives_errors(tmp_path, monkeypatch, caplog):
+    b = make_bot(tmp_path)
+    monkeypatch.setattr(B.Bot, "application_id", APP)
+    audit = SimpleNamespace(send=AsyncMock(side_effect=discordauth.Blocked()))
+    monkeypatch.setattr(b, "audit_channel", lambda: audit)
+    fetch = AsyncMock(side_effect=discord.NotFound(MagicMock(status=404), "gone"))
+    monkeypatch.setattr(b.http, "get_guild_application_command_permissions", fetch)
+    asyncio.run(b.check_command_channels())
+    assert audit.send.await_count == 1
+    assert "could not post" in caplog.text
+    audit.send.side_effect = aiohttp.ClientConnectionError()
+    asyncio.run(b.check_command_channels())
+    assert audit.send.await_count == 2
+    fetch.side_effect = TimeoutError()
+    asyncio.run(b.check_command_channels())
+    assert audit.send.await_count == 2 and "could not read command permissions" in caplog.text
+    monkeypatch.setattr(b, "audit_channel", lambda: None)
+    fetch.side_effect = None
+    fetch.return_value = []
+    asyncio.run(b.check_command_channels())
+    monkeypatch.setattr(B.Bot, "application_id", None)
+    fetch.reset_mock()
+    asyncio.run(b.check_command_channels())
+    fetch.assert_not_awaited()
 
 
 # --- sampling ---
@@ -1175,6 +1233,8 @@ def test_autocomplete(tmp_path):
     b, cmds = cmd_bot(tmp_path)
     b.containers = [Container(str(i), f"app{i}", "running", "") for i in range(30)] + [WEB]
     names = cmds["docker restart"].options[0].autocomplete
+    assert asyncio.run(names(SimpleNamespace(value=None))) == ["web"]
+    b.cfg.restart_allow = ["*"]
     spans = cmds["charts window"].options[0].autocomplete
     assert asyncio.run(names(SimpleNamespace(value="WE"))) == ["web"]
     assert len(asyncio.run(names(SimpleNamespace(value=None)))) == 25
@@ -1287,6 +1347,26 @@ def test_commands_are_answered_in_each_output_and_the_commands_channel(tmp_path,
         asyncio.run(b.process_application_commands(SimpleNamespace(channel_id=target, guild_id=GUILD)))
     asyncio.run(b.process_application_commands(SimpleNamespace(channel_id=41, guild_id=666)))
     assert seen == [41, 42, 43]
+
+
+def test_other_channels_get_a_pointer_not_silence(tmp_path, monkeypatch):
+    monkeypatch.setattr(discord.Bot, "process_application_commands", AsyncMock())
+    b = make_bot(tmp_path, commands_channel_id=43)
+
+    def run(kind, error=None):
+        response = SimpleNamespace(send_message=AsyncMock(side_effect=error),
+                                   send_autocomplete_result=AsyncMock(side_effect=error))
+        asyncio.run(b.process_application_commands(
+            SimpleNamespace(channel_id=PANEL + 1, guild_id=GUILD, type=kind, response=response)))
+        return response
+    r = run(discord.InteractionType.application_command)
+    r.send_message.assert_awaited_once_with(f"Use this bot's commands in <#{PANEL}>, <#43>.", ephemeral=True)
+    run(discord.InteractionType.auto_complete).send_autocomplete_result.assert_awaited_once_with(choices=[])
+    r = run(discord.InteractionType.component)
+    r.send_message.assert_not_awaited()
+    r.send_autocomplete_result.assert_not_awaited()
+    run(discord.InteractionType.application_command, discordauth.Blocked())
+    discord.Bot.process_application_commands.assert_not_awaited()
 
 
 def test_output_never_posts_to_a_channel_in_another_guild(tmp_path):

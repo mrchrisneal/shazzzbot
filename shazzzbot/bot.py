@@ -126,6 +126,7 @@ class Bot(discord.Bot):
         self.http_session: aiohttp.ClientSession | None = None
         self.docker: Docker | None = None
         self.containers: list[Container] = []
+        self._channels_checked = False
         self._inventory = Inventory()
         self.engine: Engine | None = None
         self._engine_at = -ENGINE_EVERY
@@ -261,12 +262,60 @@ class Bot(discord.Bot):
                           if spacing > config.IMAGE_FLOOR or self._image_retry else {})}, 1), f)
         os.replace(tmp, self.cfg.state_file)
 
+    def served_channels(self) -> set[int]:
+        return {b.channel_id for b in self.boards} | {c for c in (self.cfg.commands_channel_id,) if c}
+
+    def channels_text(self) -> str:
+        return ", ".join(f"<#{c}>" for c in sorted(self.served_channels())[:20])
+
     async def process_application_commands(
             self, interaction: discord.Interaction, auto_sync: bool | None = None) -> None:
         """Route commands and autocomplete only to this bot's output channels and optional commands channel."""
-        if interaction.guild_id == self.cfg.guild_id \
-                and interaction.channel_id in {b.channel_id for b in self.boards} | {self.cfg.commands_channel_id}:
+        if interaction.guild_id != self.cfg.guild_id:
+            return
+        if interaction.channel_id in self.served_channels():
             await super().process_application_commands(interaction, auto_sync)
+            return
+        kind = getattr(interaction, "type", None)
+        try:
+            if kind == discord.InteractionType.auto_complete:
+                await interaction.response.send_autocomplete_result(choices=[])
+            elif kind == discord.InteractionType.application_command:
+                await interaction.response.send_message(
+                    f"Use this bot's commands in {self.channels_text()}.", ephemeral=True)
+        except (discord.HTTPException, discordauth.Blocked) as e:
+            log.warning("could not answer a command outside the bot's channels: %s", e)
+
+    async def check_command_channels(self) -> None:
+        """Warn when the app-level command setting lets members run commands where the bot never answers.
+        Discord administrators and per-command overrides bypass this setting."""
+        app_id = self.application_id
+        if not app_id:
+            return
+        try:
+            entries = await asyncio.wait_for(self.http.get_guild_application_command_permissions(
+                app_id, self.cfg.guild_id), 10)
+        except discord.NotFound:
+            entries = []
+        except (discord.HTTPException, discordauth.Blocked, TimeoutError, aiohttp.ClientError, OSError) as e:
+            log.warning("could not read command permissions: %s", e)
+            return
+        app = next((e for e in entries if int(e["id"]) == app_id), None)
+        rules = {int(r["id"]): r["permission"] for r in (app["permissions"] if app else []) if r["type"] == 3}
+        allowed = {c for c, ok in rules.items() if ok}
+        if rules.get(self.cfg.guild_id - 1) is False and allowed and allowed <= self.served_channels():
+            return
+        text = ("This bot's commands can be used in channels where it never answers. In Server Settings > "
+                "Integrations > this app > Channels, deny All Channels and allow only "
+                f"{self.channels_text()}.")
+        log.warning("%s", text)
+        ch = self.audit_channel()
+        if ch is None:
+            return
+        try:
+            await asyncio.wait_for(ch.send(text, allowed_mentions=discord.AllowedMentions.none()), 10)
+        except (discord.HTTPException, discordauth.Blocked, TimeoutError, aiohttp.ClientError, OSError) as e:
+            log.warning("could not post the command channel warning: %s", e)
 
     async def start(self, token: str, *, reconnect: bool = True) -> None:
         """Sampling starts before login, so the history keeps filling while Discord is down or rate limited."""
@@ -286,6 +335,9 @@ class Bot(discord.Bot):
                 await g.leave()
         if not self.panel_loop.is_running():
             self.panel_loop.start()
+        if not self._channels_checked:
+            self._channels_checked = True
+            await self.check_command_channels()
 
     async def on_guild_join(self, guild: discord.Guild) -> None:
         if guild.id != self.cfg.guild_id:
@@ -836,7 +888,8 @@ def register(bot: Bot) -> None:
 
     async def container_names(actx: discord.AutocompleteContext) -> list[str]:
         q = str(actx.value or "").lower()
-        return [c.name for c in bot.containers if q in c.name.lower()][:25]
+        names = [c.name for c in bot.containers if q in c.name.lower()]
+        return [n for n in names if n not in restarts.blocked(bot, [n])][:25]
 
     panel_cmd = bot.create_group("panel", "Status panel")
 
